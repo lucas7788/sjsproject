@@ -75,8 +75,9 @@ func (t *SimpleChaincode) initMoneyAccount(stub shim.ChaincodeStubInterface, arg
     	moneyAccount.usableMoney+=money
     }
     else if f=="out"{
-    	if moneyAccount.usableMoney<money
+    	if moneyAccount.usableMoney<money{
     	    return shim.Error("the out money is more than usableMoney")
+    	}
     	moneyAccount.usableMoney-=money
     }else{
     	return shim.Error("initialize funtion must be in or out")
