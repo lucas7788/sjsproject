@@ -1,25 +1,10 @@
-/*
-Copyright IBM Corp. 2016 All Rights Reserved.
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-		 http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-*/
-
 package main
 
 
 import (
         "crypto/x509"
        "encoding/pem"
+       "encoding/json"
 	"fmt"
 	"strconv" 
 	"github.com/hyperledger/fabric/core/chaincode/shim"
@@ -29,11 +14,14 @@ import (
 // SimpleChaincode example simple Chaincode implementation
 type SimpleChaincode struct {
 }
+type MoneyAccount struct{
+	usableMoney int
+	frozenMoney int
+}
+
 
 func (t *SimpleChaincode) Init(stub shim.ChaincodeStubInterface) pb.Response  {
         fmt.Println("########### example_cc Init ###########")
-	 
-
 	return shim.Success(nil)
 
 
@@ -60,19 +48,47 @@ func (t *SimpleChaincode) Invoke(stub shim.ChaincodeStubInterface) pb.Response {
 	
 	return shim.Error("Unknown action, check the first argument, must be one of 'delete', 'query', or 'move'")
 }
+//orgName username in/out money
 func (t *SimpleChaincode) initMoneyAccount(stub shim.ChaincodeStubInterface, args []string) pb.Response {
-	if len(args) != 1 {
+	if len(args) != 4 {
 		return shim.Error("Incorrect number of arguments. Expecting 1")
 	}
-
-	A := args[1]
-
-	// Delete the key from the state in ledger
-	err := stub.DelState(A)
+	orgName:=args[0]
+	username:=args[1]
+	f:=args[2]
+	money:=args[3]
+    if orgName==""||username==""||f==""||money==""{
+        return shim.Error("params can not be nil")
+    }
+	money,error:=strconv.Atoi(money)
+    if error!=nil {
+    	return shim.Error("money is wrong")
+    }
+    //moneyAccount {"usableMoney":"","frozenMoney":""}
+    mAccount,err:=stub.GetState(orgName+username);
+    if err!=nil{
+    	return shim.Error("failed to get state")
+    }
+    var moneyAccount MoneyAccount
+    json.Unmarshal(mAccount,&moneyAccount) 
+    if f=="in"{
+    	moneyAccount.usableMoney+=money
+    }
+    else if f=="out"{
+    	if moneyAccount.usableMoney<money
+    	    return shim.Error("the out money is more than usableMoney")
+    	moneyAccount.usableMoney-=money
+    }else{
+    	return shim.Error("initialize funtion must be in or out")
+    }
+    moneyAccount,err:=json.marshal(&moneyAccount)
+    if err!=nil{
+    	return shim.Error("transfer moneyAccount failed")
+    }
+    err:=stub.PutState(orgName+username,moneyAccount)
 	if err != nil {
-		return shim.Error("Failed to delete state")
+		return shim.Error("Failed to put state")
 	}
-
 	return shim.Success(nil)
 }
 func (t *SimpleChaincode) Query(stub shim.ChaincodeStubInterface) pb.Response {
